@@ -1,18 +1,19 @@
 import Foundation
 import Lattice
+import Hummingbird
 
 struct RPCRouter: Sendable {
     let context: NodeContext
 
-    func handle(_ request: RPCRequest) async -> RPCResponse {
+    func handle(_ request: RPCRequest) async throws -> Response {
         switch request.method {
         case "lattice_chainHeight":
             let height = await context.chainHeight()
-            return .success(height, id: request.id)
+            return jsonResponse(result: height, id: request.id)
 
         case "lattice_chainTip":
             let tip = await context.chainTip()
-            return .success(tip, id: request.id)
+            return jsonResponse(result: tip, id: request.id)
 
         case "lattice_chainSpec":
             let spec = context.genesisConfig.spec
@@ -25,7 +26,7 @@ struct RPCRouter: Sendable {
                 halvingInterval: spec.halvingInterval,
                 initialReward: spec.initialReward
             )
-            return .success(info, id: request.id)
+            return jsonResponse(result: info, id: request.id)
 
         case "lattice_nodeInfo":
             let height = await context.chainHeight()
@@ -41,18 +42,18 @@ struct RPCRouter: Sendable {
                 genesisHash: genesis,
                 peerCount: peers
             )
-            return .success(info, id: request.id)
+            return jsonResponse(result: info, id: request.id)
 
         case "lattice_peerCount":
             let count = await context.peerCount(directory: "Nexus") ?? 0
-            return .success(count, id: request.id)
+            return jsonResponse(result: count, id: request.id)
 
         case "lattice_getMempoolInfo":
             if let info = await context.mempoolInfo(directory: "Nexus") {
                 let result = MempoolInfo(count: info.count, totalFees: info.fees)
-                return .success(result, id: request.id)
+                return jsonResponse(result: result, id: request.id)
             }
-            return .error(code: -32000, message: "Chain network not available", id: request.id)
+            return errorResponse(code: -32000, message: "Chain network not available", id: request.id)
 
         case "lattice_generateKeyPair":
             let keyPair = CryptoUtils.generateKeyPair()
@@ -62,18 +63,31 @@ struct RPCRouter: Sendable {
                 privateKey: keyPair.privateKey,
                 address: address
             )
-            return .success(result, id: request.id)
-
-        case "lattice_getBalance":
-            guard let address = request.params?.first?.stringValue else {
-                return .error(code: -32602, message: "Missing address parameter", id: request.id)
-            }
-            _ = address
-            return .error(code: -32601, message: "Balance queries require state resolution (coming soon)", id: request.id)
+            return jsonResponse(result: result, id: request.id)
 
         default:
-            return .error(code: -32601, message: "Method not found: \(request.method)", id: request.id)
+            return errorResponse(code: -32601, message: "Method not found: \(request.method)", id: request.id)
         }
+    }
+
+    private func jsonResponse<T: Codable & Sendable>(result: T, id: Int) -> Response {
+        let rpc = RPCResponse(jsonrpc: "2.0", result: result, error: nil as RPCError?, id: id)
+        let data = try! JSONEncoder().encode(rpc)
+        return Response(
+            status: .ok,
+            headers: [.contentType: "application/json", .accessControlAllowOrigin: "*"],
+            body: .init(byteBuffer: .init(data: data))
+        )
+    }
+
+    private func errorResponse(code: Int, message: String, id: Int) -> Response {
+        let rpc = RPCResponse<EmptyResult>(jsonrpc: "2.0", result: nil, error: RPCError(code: code, message: message), id: id)
+        let data = try! JSONEncoder().encode(rpc)
+        return Response(
+            status: .ok,
+            headers: [.contentType: "application/json", .accessControlAllowOrigin: "*"],
+            body: .init(byteBuffer: .init(data: data))
+        )
     }
 }
 

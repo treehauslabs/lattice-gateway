@@ -38,26 +38,13 @@ enum RPCParam: Codable, Sendable {
         if case .string(let s) = self { return s }
         return nil
     }
-
-    var intValue: Int? {
-        if case .int(let i) = self { return i }
-        return nil
-    }
 }
 
-struct RPCResponse: Codable, Sendable {
+struct RPCResponse<T: Codable & Sendable>: Codable, Sendable {
     let jsonrpc: String
-    let result: AnyCodable?
+    let result: T?
     let error: RPCError?
     let id: Int
-
-    static func success(_ result: some Codable & Sendable, id: Int) -> RPCResponse {
-        RPCResponse(jsonrpc: "2.0", result: AnyCodable(result), error: nil, id: id)
-    }
-
-    static func error(code: Int, message: String, id: Int) -> RPCResponse {
-        RPCResponse(jsonrpc: "2.0", result: nil, error: RPCError(code: code, message: message), id: id)
-    }
 }
 
 struct RPCError: Codable, Sendable {
@@ -65,27 +52,4 @@ struct RPCError: Codable, Sendable {
     let message: String
 }
 
-struct AnyCodable: Codable, Sendable {
-    private let _encode: @Sendable (Encoder) throws -> Void
-
-    init(_ value: some Codable & Sendable) {
-        self._encode = { encoder in try value.encode(to: encoder) }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        try _encode(encoder)
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if let s = try? container.decode(String.self) {
-            self = AnyCodable(s)
-        } else if let i = try? container.decode(Int.self) {
-            self = AnyCodable(i)
-        } else if let b = try? container.decode(Bool.self) {
-            self = AnyCodable(b)
-        } else {
-            self = AnyCodable("null")
-        }
-    }
-}
+struct EmptyResult: Codable, Sendable {}

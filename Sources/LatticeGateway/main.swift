@@ -2,7 +2,7 @@ import Foundation
 import Lattice
 import AcornMemoryWorker
 import Acorn
-import NIO
+import Hummingbird
 import UInt256
 #if canImport(Glibc)
 import Glibc
@@ -67,10 +67,25 @@ let context = NodeContext(
     listenPort: p2pPort
 )
 
-let router = RPCRouter(context: context)
-let group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-let server = GatewayServer(host: "127.0.0.1", port: httpPort, router: router, group: group)
-let channel = try await server.start()
+let rpcRouter = RPCRouter(context: context)
+
+let router = Router()
+router.post("/") { request, _ -> Response in
+    let body = try await request.body.collect(upTo: 1_048_576)
+    let rpcRequest = try JSONDecoder().decode(RPCRequest.self, from: body)
+    return try await rpcRouter.handle(rpcRequest)
+}
+
+router.on("/", method: .options) { _, _ -> Response in
+    Response(
+        status: .ok,
+        headers: [
+            .accessControlAllowOrigin: "*",
+            .accessControlAllowMethods: "POST, OPTIONS",
+            .accessControlAllowHeaders: "Content-Type",
+        ]
+    )
+}
 
 print("  \u{001B}[32m✓\u{001B}[0m HTTP server listening on http://127.0.0.1:\(httpPort)")
 print("")
@@ -85,22 +100,13 @@ print("    curl -X POST http://127.0.0.1:\(httpPort) \\")
 print("      -H 'Content-Type: application/json' \\")
 print("      -d '{\"jsonrpc\":\"2.0\",\"method\":\"lattice_nodeInfo\",\"params\":[],\"id\":1}'")
 print("")
-print("  Press Ctrl+C to stop")
 
-let keepAlive = AsyncStream<Void> { continuation in
-    let src = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-    signal(SIGINT, SIG_IGN)
-    src.setEventHandler {
-        continuation.finish()
-    }
-    src.resume()
-}
+let app = Application(
+    router: router,
+    configuration: .init(address: .hostname("127.0.0.1", port: httpPort))
+)
 
-for await _ in keepAlive {}
+try await app.runService()
 
-print("")
-print("  Shutting down...")
-try await channel.close()
-try await group.shutdownGracefully()
 await node.stop()
 print("  \u{001B}[32m✓\u{001B}[0m Gateway stopped")

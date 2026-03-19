@@ -12,7 +12,7 @@ let package = Package(
     dependencies: [
         .package(path: "../lattice"),
         .package(path: "../AcornMemoryWorker"),
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
     ],
     targets: [
         .executableTarget(
@@ -20,9 +20,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Lattice", package: "lattice"),
                 .product(name: "AcornMemoryWorker", package: "AcornMemoryWorker"),
-                .product(name: "NIO", package: "swift-nio"),
-                .product(name: "NIOFoundationCompat", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "Hummingbird", package: "hummingbird"),
             ]),
     ]
 )

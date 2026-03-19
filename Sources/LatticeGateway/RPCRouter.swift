@@ -55,6 +55,34 @@ struct RPCRouter: Sendable {
             }
             return errorResponse(code: -32000, message: "Chain network not available", id: request.id)
 
+        case "lattice_getBlock":
+            guard let hash = request.params?.first?.stringValue else {
+                return errorResponse(code: -32602, message: "Missing block hash parameter", id: request.id)
+            }
+            if let block = await context.getBlock(hash: hash) {
+                let onMainChain = await context.isOnMainChain(hash: hash)
+                let info = BlockInfo(
+                    hash: block.blockHash,
+                    index: block.blockIndex,
+                    previousBlockHash: block.previousBlockHash,
+                    childBlockHashes: block.childBlockHashes,
+                    onMainChain: onMainChain
+                )
+                return jsonResponse(result: info, id: request.id)
+            }
+            return errorResponse(code: -32000, message: "Block not found", id: request.id)
+
+        case "lattice_getLatestBlock":
+            let block = await context.getLatestBlock()
+            let info = BlockInfo(
+                hash: block.blockHash,
+                index: block.blockIndex,
+                previousBlockHash: block.previousBlockHash,
+                childBlockHashes: block.childBlockHashes,
+                onMainChain: true
+            )
+            return jsonResponse(result: info, id: request.id)
+
         case "lattice_generateKeyPair":
             let keyPair = CryptoUtils.generateKeyPair()
             let address = CryptoUtils.createAddress(from: keyPair.publicKey)
@@ -114,6 +142,14 @@ struct NodeInfo: Codable, Sendable {
 struct MempoolInfo: Codable, Sendable {
     let count: Int
     let totalFees: UInt64
+}
+
+struct BlockInfo: Codable, Sendable {
+    let hash: String
+    let index: UInt64
+    let previousBlockHash: String?
+    let childBlockHashes: [String]
+    let onMainChain: Bool
 }
 
 struct KeyPairInfo: Codable, Sendable {

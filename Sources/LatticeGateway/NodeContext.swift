@@ -41,4 +41,19 @@ final class NodeContext: @unchecked Sendable {
         guard let network = await node.network(for: directory) else { return nil }
         return await network.ivy.connectedPeers.count
     }
+
+    func getBlock(hash: String) async -> BlockMeta? {
+        let chainState = await node.genesisResult.chainState
+        return await chainState.getConsensusBlock(hash: hash)
+    }
+
+    func getLatestBlock() async -> BlockMeta {
+        let chainState = await node.genesisResult.chainState
+        return await chainState.getHighestBlock()
+    }
+
+    func isOnMainChain(hash: String) async -> Bool {
+        let chainState = await node.genesisResult.chainState
+        return await chainState.isOnMainChain(hash: hash)
+    }
 }
